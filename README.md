@@ -72,41 +72,72 @@ An AI-powered resume analysis and ranking tool designed to streamline the recrui
 
 Before setting up the application, ensure you have:
 
-1. **Replit Account** - For hosting and deployment
+1. **Docker & Docker Compose** - For containerized deployment ([Install Docker](https://docs.docker.com/get-docker/))
 2. **OpenRouter API Key** - For AI-powered analysis ([Get API Key](https://openrouter.ai/))
-3. **SendGrid API Key** - For email functionality ([Get API Key](https://sendgrid.com/))
-4. **PostgreSQL Database** - Available through Replit's database service
+3. **SendGrid API Key** - For email functionality (optional) ([Get API Key](https://sendgrid.com/))
+4. **Git** - For cloning the repository
 
 ## 🚀 Installation & Setup
 
-### 1. Fork the Template
-1. Open the project in Replit
-2. Fork or clone the repository
-3. Wait for automatic dependency installation
+### 1. Clone the Repository
+```bash
+git clone https://github.com/tabish-pro/hrtech.git
+cd hrtech
+```
 
 ### 2. Environment Configuration
-Set up the following environment variables in Replit Secrets:
+Copy the example environment file and configure your secrets:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and fill in your values:
 
 ```bash
 # Required - OpenRouter API for AI analysis
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-
-# Required - Database connection
-DATABASE_URL=your_postgresql_connection_string
+OPENROUTER_API_KEY=sk-or-your-openrouter-key-here
 
 # Optional - Email functionality
-SENDGRID_API_KEY=your_sendgrid_api_key_here
+SENDGRID_API_KEY=SG-your-sendgrid-key-here
+SENDGRID_FROM_EMAIL=your_verified_sender@domain.com
+
+# Default admin password (change this!)
+DEFAULT_ADMIN_PASSWORD=your_secure_admin_password
+
+# PostgreSQL database settings
+POSTGRES_DB=resume_analyzer_db
+POSTGRES_USER=your_db_user
+POSTGRES_PASSWORD=your_secure_db_password
+DATABASE_URL=postgresql://your_db_user:your_secure_db_password@db:5432/resume_analyzer_db?sslmode=disable
 ```
 
-### 3. Database Setup
-The application automatically initializes the database with:
-- User management tables
-- Default admin account (`xxx` / `xxx`)
-- Proper indexing and constraints
-
-### 4. Run the Application
+### 3. Start the Application with Docker
 ```bash
+docker-compose up --build
+```
+
+This will:
+- Build the Node.js application container
+- Start a PostgreSQL database container
+- Initialize the database with user management tables
+- Create the default admin account (`hradmin` / your configured password)
+
+### 4. Access the Application
+Open your browser and navigate to:
+```
+http://localhost:3000
+```
+
+### Alternative: Run Without Docker
+If you prefer to run without Docker:
+
+```bash
+# Install dependencies
 npm install
+
+# Ensure PostgreSQL is running and DATABASE_URL points to it
+# Then start the server
 node server.js
 ```
 
@@ -117,28 +148,28 @@ node server.js
 #### OpenRouter Setup
 1. Visit [OpenRouter.ai](https://openrouter.ai/)
 2. Create an account and generate an API key
-3. Add the key to Replit Secrets as `OPENROUTER_API_KEY`
+3. Add the key to your `.env` file as `OPENROUTER_API_KEY`
 4. Supported models: GPT-4o-mini (default), Claude, and others
 
 #### SendGrid Setup (Optional)
 1. Create a [SendGrid account](https://sendgrid.com/)
 2. Generate an API key with email sending permissions
 3. Verify your sender email address
-4. Add the key to Replit Secrets as `SENDGRID_API_KEY`
+4. Add the key to your `.env` file as `SENDGRID_API_KEY`
+5. Set `SENDGRID_FROM_EMAIL` to your verified sender address
 
 ### Database Configuration
-The PostgreSQL database is automatically configured with:
+The PostgreSQL database is automatically configured via Docker Compose with:
 - User authentication table
 - Session management
-- Audit logging for user actions
-- Automatic backup and recovery
+- Persistent data storage via Docker volumes
 
 ## 📖 Usage Guide
 
 ### Getting Started
 
 1. **Login**: Access the application using your credentials
-   - Default admin: `xxx` / `xxx`
+   - Default admin: `hradmin` / (password set in `.env` as `DEFAULT_ADMIN_PASSWORD`)
    - Create additional users through the admin panel
 
 2. **Upload Job Description**: 
@@ -306,26 +337,44 @@ POST /api/send-email
 
 ## 🚀 Deployment
 
-### Replit Deployment
-1. **Prepare Environment**:
-   - Ensure all secrets are configured
-   - Test application functionality locally
-   - Verify database connectivity
+### Docker Deployment (Recommended)
 
-2. **Deploy Application**:
-   - Click "Deploy" in the Replit interface
-   - Choose "Autoscale Deployment" for high availability
-   - Configure resource allocation (1 CPU, 1GB RAM recommended)
-   - Set maximum instances based on expected traffic
+#### Local Development
+```bash
+# Start all services
+docker-compose up --build
+
+# Run in detached mode (background)
+docker-compose up -d --build
+
+# View logs
+docker-compose logs -f
+
+# Stop all services
+docker-compose down
+
+# Stop and remove volumes (reset database)
+docker-compose down -v
+```
+
+#### Production Deployment
+1. **Prepare Environment**:
+   - Configure `.env` with production values
+   - Use strong passwords for database and admin account
+   - Set `NODE_ENV=production`
+
+2. **Deploy with Docker Compose**:
+   ```bash
+   docker-compose up -d --build
+   ```
 
 3. **Production Configuration**:
-   - Enable custom domain (optional)
-   - Configure SSL certificates (automatic)
+   - Set up a reverse proxy (nginx/traefik) for SSL termination
+   - Configure firewall rules (see Firewall section below)
    - Set up monitoring and logging
-   - Configure backup and recovery procedures
+   - Configure database backups
 
 ### Scaling Considerations
-- **Traffic Management**: Autoscale handles up to 6,000 concurrent users
 - **API Quotas**: Monitor OpenRouter usage and implement quotas
 - **Database Performance**: PostgreSQL handles moderate concurrent loads
 - **File Storage**: Temporary file processing, no persistent storage needed
@@ -336,17 +385,19 @@ POST /api/send-email
 NODE_ENV=production
 PORT=3000
 
-# Database (automatic in Replit)
-DATABASE_URL=postgresql://...
+# Database
+POSTGRES_DB=resume_analyzer_db
+POSTGRES_USER=your_db_user
+POSTGRES_PASSWORD=your_secure_password
+DATABASE_URL=postgresql://your_db_user:your_secure_password@db:5432/resume_analyzer_db?sslmode=disable
 
 # Required APIs
 OPENROUTER_API_KEY=sk-or-...
 SENDGRID_API_KEY=SG...
+SENDGRID_FROM_EMAIL=your_verified_sender@domain.com
 
-# Optional configurations
-MAX_FILE_SIZE=10485760
-MAX_BATCH_SIZE=50
-API_TIMEOUT=30000
+# Admin account
+DEFAULT_ADMIN_PASSWORD=your_secure_admin_password
 ```
 
 ## 🔒 Security Features
@@ -375,7 +426,7 @@ API_TIMEOUT=30000
 
 #### API Key Problems
 - **Symptom**: "OpenRouter API key is missing" error
-- **Solution**: Verify `OPENROUTER_API_KEY` is set in Replit Secrets
+- **Solution**: Verify `OPENROUTER_API_KEY` is set in your `.env` file
 - **Check**: Ensure key starts with "sk-or-" and is at least 20 characters
 
 #### File Processing Errors
@@ -385,8 +436,8 @@ API_TIMEOUT=30000
 
 #### Database Connection
 - **Symptom**: "Database connection failed"
-- **Solution**: Verify `DATABASE_URL` is properly configured
-- **Check**: Ensure PostgreSQL service is running in Replit
+- **Solution**: Verify `DATABASE_URL` is properly configured in `.env`
+- **Check**: Ensure PostgreSQL container is running (`docker-compose ps`)
 
 #### Rate Limiting
 - **Symptom**: "Too many requests" errors
@@ -411,7 +462,7 @@ const API_TIMEOUT = 45000; // 45 seconds
 ### Debugging Tools
 - **Console Logging**: Detailed processing logs in browser console
 - **Network Tab**: Monitor API requests and responses
-- **Replit Logs**: Server-side error tracking and debugging
+- **Docker Logs**: Server-side error tracking (`docker-compose logs -f app`)
 
 ## 🤝 Contributing
 
@@ -445,7 +496,7 @@ For issues, questions, or feature requests:
 
 ---
 
-**Made with ❤️ by the Lamprell Team | Powered by [Replit](https://replit.com)**
+**Made with ❤️ by the Lamprell Team**
 
 *This application uses AI for resume analysis. Results should be used as guidance alongside human judgment in recruitment decisions.*
 
