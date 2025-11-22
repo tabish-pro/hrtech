@@ -1,0 +1,139 @@
+
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Login - Resume Analyzer</title>
+        <link href="style.css" rel="stylesheet" type="text/css" />
+        <link
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+            rel="stylesheet"
+        />
+    </head>
+    <body>
+        <div class="login-container">
+            <div class="login-card">
+                <div class="login-header">
+                    <h1><i class="fas fa-user-tie"></i> Lamprell Resume Analyzer</h1>
+                    <p>AI-powered recruitment tool</p>
+                </div>
+                
+                <form id="loginForm" class="login-form">
+                    <div class="input-group">
+                        <label for="username">
+                            <i class="fas fa-user"></i>
+                            Username
+                        </label>
+                        <input
+                            type="text"
+                            id="username"
+                            name="username"
+                            placeholder="Enter your username"
+                            required
+                        />
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="password">
+                            <i class="fas fa-lock"></i>
+                            Password
+                        </label>
+                        <input
+                            type="password"
+                            id="password"
+                            name="password"
+                            placeholder="Enter your password"
+                            required
+                        />
+                    </div>
+                    
+                    <button type="submit" class="login-btn">
+                        <i class="fas fa-sign-in-alt"></i>
+                        Sign In
+                    </button>
+                    
+                    <div id="errorMessage" class="error-message" style="display: none;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Invalid username or password. Please try again.
+                    </div>
+                </form>
+                
+                <div class="login-footer">
+                    <small>
+                        <i class="fas fa-shield-alt"></i>
+                        Secure HR Authentication System
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            document.getElementById('loginForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                const errorMessage = document.getElementById('errorMessage');
+                const submitBtn = this.querySelector('button[type="submit"]');
+                
+                // Show loading state
+                const originalText = submitBtn.innerHTML;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Signing In...';
+                submitBtn.disabled = true;
+                
+                // Hide any previous error
+                errorMessage.style.display = 'none';
+                
+                try {
+                    const response = await fetch('/api/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ username, password })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (response.ok && result.success) {
+                        // Set session data
+                        sessionStorage.setItem('isLoggedIn', 'true');
+                        sessionStorage.setItem('username', result.user.username);
+                        sessionStorage.setItem('isAdmin', result.user.isAdmin);
+                        sessionStorage.setItem('userId', result.user.id);
+                        
+                        // Redirect to main page
+                        window.location.href = 'index.html';
+                    } else {
+                        throw new Error(result.error || 'Login failed');
+                    }
+                } catch (error) {
+                    console.error('Login error:', error);
+                    
+                    // Show error
+                    errorMessage.textContent = error.message || 'Invalid username or password. Please try again.';
+                    errorMessage.style.display = 'block';
+                    
+                    // Restore button
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
+                    
+                    // Clear password field
+                    document.getElementById('password').value = '';
+                    
+                    // Shake animation
+                    errorMessage.style.animation = 'shake 0.5s ease-in-out';
+                    setTimeout(() => {
+                        errorMessage.style.animation = '';
+                    }, 500);
+                }
+            });
+            
+            // Check if already logged in
+            if (sessionStorage.getItem('isLoggedIn') === 'true') {
+                window.location.href = 'index.html';
+            }
+        </script>
+    </body>
+</html>

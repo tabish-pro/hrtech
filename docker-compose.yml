@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # Node.js Application Service
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000" # Map host port 3000 to container port 3000
+    environment:
+      # These variables will be passed to your Node.js application
+      # Values are read from .env file - do NOT hardcode secrets here
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+      SENDGRID_FROM_EMAIL: ${SENDGRID_FROM_EMAIL:-mail@quantzinnovations.com}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-hradmin@2025}
+      # DATABASE_URL connects to the 'db' service defined below
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-resume_analyzer_db}?sslmode=disable"
+      NODE_ENV: ${NODE_ENV:-development}
+    depends_on:
+      - db # Ensure the database service starts before the app service
+    # Optional: Mount your local code into the container for development,
+    # so changes are reflected without rebuilding the image.
+    # When using this, `npm ci` should typically be run directly from Dockerfile.
+    # volumes:
+    #   - .:/app
+    #   - /app/node_modules # Exclude node_modules from being overwritten by host volume
+
+  # PostgreSQL Database Service
+  db:
+    image: postgres:13-alpine # Using a lightweight PostgreSQL image
+    environment:
+      # These variables are used by the PostgreSQL image for initial setup
+      # Values are read from .env file - do NOT hardcode secrets here
+      POSTGRES_DB: ${POSTGRES_DB:-resume_analyzer_db}
+      POSTGRES_USER: ${POSTGRES_USER:-user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Persistent storage for database data
+    ports:
+      - "5432:5432" # Optional: Map host port 5432 to container port 5432 for external access (e.g., pgAdmin)
+
+# Define named volumes for data persistence
+volumes:
+  postgres_data:

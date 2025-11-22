@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Resume Analyzer - AI-Powered Recruitment Tool</title>
+        <link href="style.css" rel="stylesheet" type="text/css" />
+        <link
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+            rel="stylesheet"
+        />
+    </head>
+    <body>
+        <div class="container">
+            <header>
+                <div class="header-content">
+                    <div class="header-main">
+                        <h1><i class="fas fa-user-tie"></i> Lamprell Resume Analyzer</h1>
+                        <p>AI-powered resume analysis and ranking tool</p>
+                    </div>
+                    <button
+                        id="settingsBtn"
+                        class="settings-btn"
+                        title="Additional Criteria"
+                    >
+                        <i class="fas fa-cog"></i>
+                    </button>
+                </div>
+            </header>
+
+            <main>
+                <!-- Job Description Section -->
+                <section class="upload-section">
+                    <div class="upload-card">
+                        <div class="upload-header">
+                            <i class="fas fa-briefcase"></i>
+                            <h2>Job Description</h2>
+                        </div>
+                        <div class="upload-area" id="jobUploadArea">
+                            <input
+                                type="file"
+                                id="jobFile"
+                                accept=".pdf,.docx"
+                                hidden
+                            />
+                            <div class="upload-content">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <p>
+                                    Drop your job description PDF or Word document here or
+                                    <span class="browse-link">browse</span>
+                                </p>
+                                <small>PDF or DOCX files only</small>
+                            </div>
+                        </div>
+                        <div
+                            id="jobFileInfo"
+                            class="file-info"
+                            style="display: none"
+                        >
+                            <button id="deleteJobBtn" class="delete-file-btn" title="Remove job description">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Resume Upload Section -->
+                <section class="upload-section">
+                    <div class="upload-card">
+                        <div class="upload-header">
+                            <i class="fas fa-users"></i>
+                            <h2>Candidate Resumes</h2>
+                        </div>
+                        <div class="upload-area" id="resumeUploadArea">
+                            <input
+                                type="file"
+                                id="resumeFiles"
+                                accept=".pdf,.docx"
+                                multiple
+                                hidden
+                            />
+                            <div class="upload-content">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <p>
+                                    Drop resume PDFs or Word documents here or
+                                    <span class="browse-link">browse</span>
+                                </p>
+                                <small>PDF and DOCX files only</small>
+                            </div>
+                        </div>
+                        <div
+                            id="resumeFileInfo"
+                            class="file-info"
+                            style="display: none"
+                        ></div>
+                        <div class="demo-note">
+                            <i class="fas fa-info-circle"></i>
+                            <small> Keep Batch Size < 200 for best results (Can upload upto 500)</small>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Format Restriction Info -->
+                <div class="format-info-note">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <small>This AI Automation works only with standard formats like PDF and Word (Docx); older and proprietary formats are not supported.</small>
+                </div>
+
+                <!-- Analysis Button -->
+                <div class="action-section">
+                    <button id="analyzeBtn" class="analyze-btn" disabled>
+                        <i class="fas fa-brain"></i>
+                        Analyze Resumes
+                    </button>
+                    
+                    <!-- Progress Bar Section -->
+                    <div id="progressSection" class="progress-section" style="display: none;">
+                        <div class="progress-container">
+                            <div class="progress-header">
+                                <span id="progressText">Initializing analysis...</span>
+                                <span id="estimatedTime" class="estimated-time">Estimated: 0s</span>
+                            </div>
+                            <div class="progress-bar-wrapper">
+                                <div class="progress-bar">
+                                    <div id="progressFill" class="progress-fill"></div>
+                                    <div class="progress-shine"></div>
+                                </div>
+                                <div id="progressPercentage" class="progress-percentage">0%</div>
+                            </div>
+                        </div>
+                        <div id="funnyMessage" class="funny-message">
+                            🤖 AI is putting on its reading glasses and analyzing your resumes like a caffeinated HR manager!
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Loading State -->
+                <div
+                    id="loadingState"
+                    class="loading-state"
+                    style="display: none"
+                >
+                    <div class="spinner"></div>
+                    <p>Analyzing resumes with AI...</p>
+                </div>
+
+                <!-- Results Section -->
+                <section
+                    id="resultsSection"
+                    class="results-section"
+                    style="display: none"
+                >
+                    <h2><i class="fas fa-chart-line"></i> Analysis Results</h2>
+                    
+                    <!-- Summary Table -->
+                    <div class="summary-section">
+                        <div class="summary-header">
+                            <h3><i class="fas fa-table"></i> Analysis Summary</h3>
+                            <button id="downloadCsvBtn" class="csv-download-btn">
+                                <i class="fas fa-file-csv"></i>
+                                Download CSV
+                            </button>
+                        </div>
+                        <div class="summary-table-container">
+                            <table id="summaryTable" class="summary-table">
+                                <thead>
+                                    <tr>
+                                        <th>Rank</th>
+                                        <th>CV Name</th>
+                                        <th>Score</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="summaryTableBody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div id="resultsContainer"></div>
+
+                    <div class="report-actions">
+                        <button
+                            id="downloadReportBtn"
+                            class="action-btn primary"
+                        >
+                            <i class="fas fa-download"></i>
+                            Download Report
+                        </button>
+                        <button
+                            id="emailReportBtn"
+                            class="action-btn secondary"
+                        >
+                            <i class="fas fa-envelope"></i>
+                            Email to HR
+                        </button>
+                    </div>
+                </section>
+            </main>
+        </div>
+
+        <!-- Settings Panel -->
+        <div id="settingsPanel" class="settings-panel">
+            <div class="settings-content">
+                <div class="settings-header">
+                    <h3>
+                        <i class="fas fa-filter"></i> Additional Configurations                   
+                    </h3>
+                    <button id="closeSettingsBtn" class="close-settings">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="settings-body">
+                    <!-- Screening Criteria Section -->
+                    <div class="settings-sectionn">
+                        <div class="section-header">
+                            <h4>
+                                <i class="fas fa-filter"></i> Additional
+                                Screening Criteria
+                            </h4>
+                            <p class="section-description">
+                                Add specific criteria that HR wants to emphasize
+                                during resume screening
+                            </p>
+                        </div>
+                        <div class="section-contentt">
+                            <div class="criteria-form">
+                                <label for="technicalSkills"
+                                    >Technical Skills (Priority)</label
+                                >
+                                <textarea
+                                    id="technicalSkills"
+                                    placeholder="e.g., React, Node.js, Python, AWS..."
+                                    rows="2"
+                                ></textarea>
+
+                                <label for="experienceLevel"
+                                    >Experience Requirements</label
+                                >
+                                <textarea
+                                    id="experienceLevel"
+                                    placeholder="e.g., minimum 3 years in fintech, startup experience..."
+                                    rows="2"
+                                ></textarea>
+
+                                <label for="softSkills"
+                                    >Soft Skills & Qualities</label
+                                >
+                                <textarea
+                                    id="softSkills"
+                                    placeholder="e.g., leadership, communication, team collaboration..."
+                                    rows="2"
+                                ></textarea>
+
+                                <label for="education"
+                                    >Education & Certifications</label
+                                >
+                                <textarea
+                                    id="education"
+                                    placeholder="e.g., Computer Science degree, AWS certifications..."
+                                    rows="2"
+                                ></textarea>
+
+                                <label for="additionalCriteria"
+                                    >Other Specific Requirements</label
+                                >
+                                <textarea
+                                    id="additionalCriteria"
+                                    placeholder="e.g., remote work experience, specific industry knowledge..."
+                                    rows="2"
+                                ></textarea>
+                            </div>
+
+                            <div class="settings-actions">
+                                <button
+                                    id="saveCriteriaBtn"
+                                    class="save-criteria-btn"
+                                >
+                                    <i class="fas fa-save"></i> Save Configuration
+                                </button>
+                                <button
+                                    id="clearCriteriaBtn"
+                                    class="clear-criteria-btn"
+                                >
+                                    <i class="fas fa-trash"></i> Clear All
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="settings-overlay"></div>
+        </div>
+
+        <!-- Email Modal -->
+        <div id="emailModal" class="modal" style="display: none">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Send Report to HR</h3>
+                    <span class="close">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <label for="hrEmail">HR Email Address:</label>
+                    <input
+                        type="email"
+                        id="hrEmail"
+                        placeholder="hr@company.com"
+                        required
+                    />
+
+                    <label for="emailSubject">Subject:</label>
+                    <input
+                        type="text"
+                        id="emailSubject"
+                        value="Resume Analysis Report"
+                        required
+                    />
+
+                    <label for="emailMessage">Message:</label>
+                    <textarea
+                        id="emailMessage"
+                        rows="4"
+                        placeholder="Please find the attached resume analysis report..."
+                    ></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button id="sendEmailBtn" class="action-btn primary">
+                        Send Email
+                    </button>
+                    <button id="cancelEmailBtn" class="action-btn secondary">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+        <script src="script.js"></script>
+    </body>
+</html>

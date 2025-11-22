@@ -1,0 +1,56 @@
+# Environment variables - NEVER commit real secrets
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Replit and Claude Code specific
+.replit
+.config/
+.local/
+.claude/
+
+# Build output
+dist/
+build/
+
+# Uploaded files and temp directories
+uploads/
+temp/
+tmp/
+
+# Coverage directory
+coverage/
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Database files (local SQLite, etc.)
+*.sqlite
+*.db

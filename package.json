@@ -1,0 +1,21 @@
+{
+  "name": "resume-matcher",
+  "version": "1.0.0",
+  "description": "AI-powered resume analysis tool",
+  "main": "server.js",
+  "scripts": {
+    "build": "echo 'Build complete - no build step needed for this project'",
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@sendgrid/mail": "^8.1.5",
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "mammoth": "^1.9.1",
+    "openai": "^5.11.0",
+    "pg": "^8.11.3"
+  }
+}
