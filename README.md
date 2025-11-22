@@ -101,7 +101,7 @@ SENDGRID_API_KEY=your_sendgrid_api_key_here
 ### 3. Database Setup
 The application automatically initializes the database with:
 - User management tables
-- Default admin account (`hradmin` / `hradmin@2025`)
+- Default admin account (`xxx` / `xxx`)
 - Proper indexing and constraints
 
 ### 4. Run the Application
@@ -138,7 +138,7 @@ The PostgreSQL database is automatically configured with:
 ### Getting Started
 
 1. **Login**: Access the application using your credentials
-   - Default admin: `hradmin` / `hradmin@2025`
+   - Default admin: `xxx` / `xxx`
    - Create additional users through the admin panel
 
 2. **Upload Job Description**: 
