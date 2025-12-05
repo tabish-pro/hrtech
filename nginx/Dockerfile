@@ -17,5 +17,5 @@ RUN chmod +x /usr/local/bin/generate-ssl-cert.sh /usr/local/bin/start-nginx.sh
 # Expose HTTP and HTTPS ports
 EXPOSE 80 443
 
-# Start nginx via startup script (generates cert first, then starts nginx)
-CMD ["/usr/local/bin/start-nginx.sh"]
+# Override the default entrypoint to use our startup script
+ENTRYPOINT ["/usr/local/bin/start-nginx.sh"]
