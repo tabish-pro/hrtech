@@ -114,7 +114,7 @@ DATABASE_URL=postgresql://your_db_user:your_secure_db_password@db:5432/resume_an
 
 ### 3. Start the Application with Docker
 ```bash
-docker-compose up --build
+sudo docker compose up --build
 ```
 
 This will:
@@ -342,37 +342,46 @@ POST /api/send-email
 #### Local Development
 ```bash
 # Start all services
-docker-compose up --build
+sudo docker compose up --build
 
 # Run in detached mode (background)
-docker-compose up -d --build
+sudo docker compose up -d --build
 
 # View logs
-docker-compose logs -f
+sudo docker compose logs -f
 
 # Stop all services
-docker-compose down
+sudo docker compose down
 
 # Stop and remove volumes (reset database)
-docker-compose down -v
+sudo docker compose down -v
 ```
 
-#### Production Deployment
+#### Production Deployment with HTTPS
+
 1. **Prepare Environment**:
    - Configure `.env` with production values
    - Use strong passwords for database and admin account
    - Set `NODE_ENV=production`
+   - Set `DOMAIN_NAME` for SSL certificate (e.g., `cvanalyzer.lamprell.com`)
 
 2. **Deploy with Docker Compose**:
    ```bash
-   docker-compose up -d --build
+   sudo docker compose build
+   sudo docker compose up -d
    ```
 
-3. **Production Configuration**:
-   - Set up a reverse proxy (nginx/traefik) for SSL termination
-   - Configure firewall rules (see Firewall section below)
+3. **HTTPS Configuration**:
+   - Nginx reverse proxy automatically configured with self-signed SSL
+   - Certificate generated on first startup (valid for 10 years)
+   - HTTP (port 80) automatically redirects to HTTPS (port 443)
+   - **See [DEPLOYMENT-HTTPS.md](DEPLOYMENT-HTTPS.md) for complete guide**
+
+4. **Production Configuration**:
+   - Configure firewall rules (see [FirewallWhitelist.md](FirewallWhitelist.md))
    - Set up monitoring and logging
    - Configure database backups
+   - Accept self-signed certificate in browser (one-time per device)
 
 ### Scaling Considerations
 - **API Quotas**: Monitor OpenRouter usage and implement quotas
@@ -437,7 +446,7 @@ DEFAULT_ADMIN_PASSWORD=your_secure_admin_password
 #### Database Connection
 - **Symptom**: "Database connection failed"
 - **Solution**: Verify `DATABASE_URL` is properly configured in `.env`
-- **Check**: Ensure PostgreSQL container is running (`docker-compose ps`)
+- **Check**: Ensure PostgreSQL container is running (`sudo docker compose ps`)
 
 #### Rate Limiting
 - **Symptom**: "Too many requests" errors
@@ -462,7 +471,7 @@ const API_TIMEOUT = 45000; // 45 seconds
 ### Debugging Tools
 - **Console Logging**: Detailed processing logs in browser console
 - **Network Tab**: Monitor API requests and responses
-- **Docker Logs**: Server-side error tracking (`docker-compose logs -f app`)
+- **Docker Logs**: Server-side error tracking (`sudo docker compose logs -f app`)
 
 ## 🤝 Contributing
 
@@ -534,7 +543,7 @@ Container images & registries
 - https://hub.docker.com
 - https://download.docker.com
 - https://get.docker.com
-  - Notes: Pulling official images (e.g., `postgres:13-alpine` from docker-compose), installing Docker Engine.
+  - Notes: Pulling official images (e.g., `postgres:13-alpine` from sudo docker compose), installing Docker Engine.
 
 Git / source code hosting
 - https://github.com

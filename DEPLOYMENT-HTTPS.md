@@ -1,14 +1,16 @@
 # HTTPS Deployment Guide - Self-Signed Certificate
 
-This guide explains how to deploy the HR Tech Resume Analyzer with HTTPS using self-signed certificates.
+This guide explains how to deploy the HR Tech Resume Analyzer with HTTPS using self-signed certificates for local network access.
 
 ## Overview
 
-The application is configured to use:
+The application is configured for:
+- **Local network access only** - internal corporate use
 - **Nginx reverse proxy** for SSL termination
-- **Self-signed SSL certificates** (valid for 10 years)
+- **Self-signed SSL certificates** (auto-generated, valid for 10 years)
 - **Automatic HTTP to HTTPS redirect**
-- **No external dependencies** - works in highly firewalled environments
+- **Firewall-friendly** - minimal outbound HTTPS requirements only
+- **Zero maintenance** - no certificate renewals needed
 
 ## What is a Self-Signed Certificate?
 
@@ -28,9 +30,10 @@ A self-signed certificate provides encryption (HTTPS) but is not verified by a t
 
 ## Prerequisites
 
-- Docker and Docker Compose installed
-- Ports 80 and 443 open in firewall (inbound)
-- `.env` file configured (optional: set DOMAIN_NAME)
+- Docker and Docker Compose installed on Linux server
+- Ports 80 and 443 open for inbound connections (local network only)
+- Outbound HTTPS (443) to Docker Hub, OpenRouter, SendGrid
+- `.env` file configured with your domain name
 
 ## Deployment Steps
 
@@ -49,25 +52,26 @@ If you omit `DOMAIN_NAME`, it defaults to `localhost`.
 
 ```bash
 # Stop any existing services
-docker-compose down
+sudo docker compose down
 
 # Build with new configuration
-docker-compose build
+sudo docker compose build
 
 # Start all services
-docker-compose up -d
+sudo docker compose up -d
 ```
 
 The Nginx container will automatically:
-- Generate a self-signed SSL certificate
+- Generate a self-signed SSL certificate on first startup
 - Configure HTTPS on port 443
 - Set up HTTP to HTTPS redirect on port 80
+- No manual certificate configuration needed
 
 ### 3. Verify Deployment
 
 **Check service status:**
 ```bash
-docker-compose ps
+sudo docker compose ps
 ```
 
 All three services should be running:
@@ -77,7 +81,7 @@ All three services should be running:
 
 **View logs:**
 ```bash
-docker-compose logs nginx
+sudo docker compose logs nginx
 ```
 
 You should see:
@@ -140,16 +144,17 @@ When you first visit the site, the browser will show a security warning:
 - TCP 80 (HTTP - for redirects)
 - TCP 443 (HTTPS - for the application)
 
-**Outbound:**
-- TCP 443 to Docker Hub (`https://registry-1.docker.io`, `https://auth.docker.io`)
-- TCP 443 to OpenRouter API (`https://openrouter.ai`)
-- TCP 443 to SendGrid API (`https://api.sendgrid.com`)
-- TCP 443/80 to Alpine Linux repos (`https://dl-cdn.alpinelinux.org`) - only during build
+**Outbound (HTTPS only - port 443):**
+- Docker Hub: `https://registry-1.docker.io`, `https://auth.docker.io`
+- OpenRouter API: `https://openrouter.ai`
+- SendGrid API: `https://api.sendgrid.com`
+- npm Registry: `https://registry.npmjs.org`
 
-**No longer required:**
+**Not required:**
 - ~~Let's Encrypt ACME servers~~
+- ~~Alpine Linux repos (using Debian base image with OpenSSL pre-installed)~~
+- ~~HTTP outbound connections~~
 - ~~OCSP responders~~
-- ~~Alpine mirrors (after initial build)~~
 
 ## Architecture
 
@@ -182,10 +187,10 @@ This is expected with self-signed certificates. Users must accept the warning ea
 **Check:**
 ```bash
 # Verify nginx is running
-docker-compose ps nginx
+sudo docker compose ps nginx
 
 # Check nginx logs
-docker-compose logs nginx
+sudo docker compose logs nginx
 
 # Verify port binding
 netstat -tulpn | grep 443
@@ -193,19 +198,19 @@ netstat -tulpn | grep 443
 
 **Fix:**
 ```bash
-docker-compose restart nginx
+sudo docker compose restart nginx
 ```
 
 ### Issue: HTTP Doesn't Redirect to HTTPS
 
 **Check nginx configuration:**
 ```bash
-docker-compose exec nginx nginx -t
+sudo docker compose exec nginx nginx -t
 ```
 
 **Reload nginx:**
 ```bash
-docker-compose exec nginx nginx -s reload
+sudo docker compose exec nginx nginx -s reload
 ```
 
 ### Issue: "502 Bad Gateway"
@@ -215,18 +220,18 @@ This means Nginx can't reach the Node.js app.
 **Check:**
 ```bash
 # Verify app is running
-docker-compose ps app
+sudo docker compose ps app
 
 # Check app logs
-docker-compose logs app
+sudo docker compose logs app
 
 # Test internal connectivity
-docker-compose exec nginx wget -O- http://app:3000
+sudo docker compose exec nginx wget -O- http://app:3000
 ```
 
 **Fix:**
 ```bash
-docker-compose restart app
+sudo docker compose restart app
 ```
 
 ## Upgrading to a Real Certificate (Future)
@@ -279,14 +284,14 @@ The self-signed certificate is valid for **10 years**. After 10 years:
 
 1. Rebuild the nginx container to generate a new certificate:
    ```bash
-   docker-compose build nginx
-   docker-compose up -d nginx
+   sudo docker compose build nginx
+   sudo docker compose up -d nginx
    ```
 
 2. Or manually generate a new certificate:
    ```bash
-   docker-compose exec nginx /usr/local/bin/generate-ssl-cert.sh
-   docker-compose restart nginx
+   sudo docker compose exec nginx /usr/local/bin/generate-ssl-cert.sh
+   sudo docker compose restart nginx
    ```
 
 ## Monitoring
@@ -307,13 +312,13 @@ echo | openssl s_client -connect your-server:443 2>/dev/null | openssl x509 -noo
 
 ```bash
 # Real-time logs
-docker-compose logs -f nginx
+sudo docker compose logs -f nginx
 
 # Access logs
-docker-compose exec nginx tail -f /var/log/nginx/access.log
+sudo docker compose exec nginx tail -f /var/log/nginx/access.log
 
 # Error logs
-docker-compose exec nginx tail -f /var/log/nginx/error.log
+sudo docker compose exec nginx tail -f /var/log/nginx/error.log
 ```
 
 ## Maintenance
@@ -322,13 +327,13 @@ docker-compose exec nginx tail -f /var/log/nginx/error.log
 
 ```bash
 # Restart all services
-docker-compose restart
+sudo docker compose restart
 
 # Restart only nginx
-docker-compose restart nginx
+sudo docker compose restart nginx
 
 # Restart only app
-docker-compose restart app
+sudo docker compose restart app
 ```
 
 ### Update Configuration
@@ -337,23 +342,23 @@ If you modify `nginx.conf`:
 
 ```bash
 # Test configuration
-docker-compose exec nginx nginx -t
+sudo docker compose exec nginx nginx -t
 
 # Reload without downtime
-docker-compose exec nginx nginx -s reload
+sudo docker compose exec nginx nginx -s reload
 ```
 
 ### Regenerate Certificate
 
 ```bash
 # Remove old certificate
-docker-compose exec nginx rm /etc/nginx/ssl/cert.pem /etc/nginx/ssl/key.pem
+sudo docker compose exec nginx rm /etc/nginx/ssl/cert.pem /etc/nginx/ssl/key.pem
 
 # Generate new certificate
-docker-compose exec nginx /usr/local/bin/generate-ssl-cert.sh
+sudo docker compose exec nginx /usr/local/bin/generate-ssl-cert.sh
 
 # Reload nginx
-docker-compose exec nginx nginx -s reload
+sudo docker compose exec nginx nginx -s reload
 ```
 
 ## Summary

@@ -32,25 +32,10 @@ Container images & registries
 - https://get.docker.com
   - Notes: Pulling official images (e.g., `postgres:13-alpine`, `nginx:alpine` from docker-compose), installing Docker Engine.
 
-Alpine Linux package repositories (for nginx:alpine and postgres:13-alpine containers)
+Alpine Linux package repositories (for postgres:13-alpine container only)
 - https://dl-cdn.alpinelinux.org
 - http://dl-cdn.alpinelinux.org
-- https://alpine.global.ssl.fastly.net
-- http://alpine.global.ssl.fastly.net
-- https://mirrors.alpinelinux.org
-  - Notes: Used by `apk` package manager inside Alpine-based Docker containers. Required for installing certbot, openssl, and other packages during container builds. Both HTTP and HTTPS may be used depending on Alpine mirror configuration.
-
-Let's Encrypt / SSL Certificate services
-- https://acme-v02.api.letsencrypt.org
-- https://acme-staging-v02.api.letsencrypt.org
-- https://letsencrypt.org
-- https://r3.o.lencr.org
-- https://r4.o.lencr.org
-- https://r10.o.lencr.org
-- https://r11.o.lencr.org
-- https://e1.o.lencr.org
-- https://e2.o.lencr.org
-  - Notes: Used by Certbot for SSL certificate generation and renewal. Production API (acme-v02) for real certificates, staging API for testing. OCSP responders (r3, r4, r10, r11, e1, e2) used for certificate validation and OCSP stapling.
+  - Notes: Used by `apk` package manager in PostgreSQL Alpine container during initial build. Nginx uses Debian base image (nginx:latest) which does NOT require Alpine repos.
 
 Git / source code hosting
 - https://github.com
@@ -77,13 +62,16 @@ Database connectivity
   - Allow the host specified by your `DATABASE_URL` (e.g., postgres server FQDN/IP + port 5432).
   - See [`DATABASE_URL`](server.js) and [docker-compose.yml](docker-compose.yml).
 
-Ports
-- Allow outbound TCP 443 (HTTPS) for all above hosts.
-- Allow outbound TCP 80 (HTTP) for Alpine Linux mirrors and Let's Encrypt ACME challenges.
-- Allow inbound TCP 80 (HTTP) for Let's Encrypt ACME challenge verification and HTTP to HTTPS redirects.
-- Allow inbound TCP 443 (HTTPS) for serving the application over SSL/TLS.
-- If running PostgreSQL remotely, allow TCP 5432 to the DB host (only if external DB used).
-- If exposing Docker daemon remotely (not recommended), allow TCP 2375/2376 as per your secure config.
+Ports (Production HTTPS Setup)
+- **Inbound (Local Network Only)**:
+  - TCP 80 (HTTP) - HTTP to HTTPS redirect
+  - TCP 443 (HTTPS) - Application access with self-signed SSL
+- **Outbound**:
+  - TCP 443 (HTTPS) - Docker Hub, OpenRouter API, SendGrid API, npm registry
+  - TCP 80 (HTTP) - Alpine repos during PostgreSQL container build (one-time)
+- **Not Required**:
+  - ~~Port 3000 (blocked - internal only)~~
+  - ~~Port 5432 (PostgreSQL internal unless using external DB)~~
 
 Quick cross-check with workspace
 - The server uses OpenRouter & SendGrid at runtime: see [`OPENROUTER_API_KEY`](server.js), [`SENDGRID_API_KEY`](server.js), and calls in [server.js](server.js).
