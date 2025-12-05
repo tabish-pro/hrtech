@@ -1,19 +1,23 @@
 FROM nginx:alpine
 
-# Install certbot for Let's Encrypt
-RUN apk add --no-cache certbot
+# Install openssl for self-signed certificate generation
+RUN apk add --no-cache openssl
 
-# Create directories
-RUN mkdir -p /var/www/certbot /var/log
+# Create directories for certificates and logs
+RUN mkdir -p /etc/nginx/ssl /var/log/nginx
 
-# Copy initial configuration
+# Copy nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
+
+# Copy certificate generation script
+COPY generate-ssl-cert.sh /usr/local/bin/generate-ssl-cert.sh
+RUN chmod +x /usr/local/bin/generate-ssl-cert.sh
+
+# Generate self-signed certificate on container startup
+RUN /usr/local/bin/generate-ssl-cert.sh
 
 # Expose HTTP and HTTPS ports
 EXPOSE 80 443
 
-# Add cron job for certificate renewal (runs daily at 3 AM)
-RUN echo "0 3 * * * /usr/local/bin/renew-certificates.sh" > /etc/crontabs/root
-
-# Start cron and nginx
-CMD crond && nginx -g 'daemon off;'
+# Start nginx
+CMD ["nginx", "-g", "daemon off;"]
