@@ -6,8 +6,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "3000:3000" # Map host port 3000 to container port 3000
+    expose:
+      - "3000"  # Internal only - accessible to nginx service
     environment:
       # These variables will be passed to your Node.js application
       # Values are read from .env file - do NOT hardcode secrets here
@@ -17,9 +17,11 @@ services:
       DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-hradmin@2025}
       # DATABASE_URL connects to the 'db' service defined below
       DATABASE_URL: "postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-resume_analyzer_db}?sslmode=disable"
-      NODE_ENV: ${NODE_ENV:-development}
+      NODE_ENV: ${NODE_ENV:-production}
     depends_on:
       - db # Ensure the database service starts before the app service
+    networks:
+      - hrtech-network
     # Optional: Mount your local code into the container for development,
     # so changes are reflected without rebuilding the image.
     # When using this, `npm ci` should typically be run directly from Dockerfile.
@@ -40,7 +42,43 @@ services:
       - postgres_data:/var/lib/postgresql/data # Persistent storage for database data
     ports:
       - "5432:5432" # Optional: Map host port 5432 to container port 5432 for external access (e.g., pgAdmin)
+    networks:
+      - hrtech-network
+
+  # Nginx Reverse Proxy Service
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"    # HTTP (for redirect and ACME challenge)
+      - "443:443"  # HTTPS (SSL termination)
+    volumes:
+      # Configuration files
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/nginx-ssl.conf:/etc/nginx/nginx-ssl.conf:ro
+      # Let's Encrypt certificates (persistent)
+      - certbot-etc:/etc/letsencrypt
+      - certbot-var:/var/lib/letsencrypt
+      # ACME challenge directory
+      - ./nginx/certbot-webroot:/var/www/certbot
+      # Renewal script
+      - ./scripts/renew-certificates.sh:/usr/local/bin/renew-certificates.sh:ro
+    environment:
+      - DOMAIN_NAME=${DOMAIN_NAME}
+    depends_on:
+      - app
+    networks:
+      - hrtech-network
+    restart: unless-stopped
 
 # Define named volumes for data persistence
 volumes:
   postgres_data:
+  certbot-etc:    # SSL certificates
+  certbot-var:    # Certbot working directory
+
+# Docker network
+networks:
+  hrtech-network:
+    driver: bridge
