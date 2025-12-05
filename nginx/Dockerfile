@@ -1,7 +1,7 @@
-FROM nginx:alpine
+FROM nginx:latest
 
-# Note: OpenSSL is already included in nginx:alpine base image
-# No need to install additional packages - avoids Alpine repo access
+# Note: nginx:latest (Debian-based) includes OpenSSL by default
+# Using Debian base instead of Alpine to avoid package manager during build
 
 # Create directories for certificates and logs
 RUN mkdir -p /etc/nginx/ssl /var/log/nginx
