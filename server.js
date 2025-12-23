@@ -1,3 +1,6 @@
+// Load environment variables from .env file
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const sgMail = require('@sendgrid/mail');
@@ -5,9 +8,19 @@ const OpenAI = require('openai');
 const mammoth = require('mammoth');
 const { Client } = require('pg');
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
+const rateLimit = require('express-rate-limit');
+const crypto = require('crypto');
+const { doubleCsrf } = require('csrf-csrf');
 const app = express();
 
-app.use(cors());
+// CORS configuration - allow credentials for cookie-based auth
+app.use(cors({
+    origin: true, // Will be restricted in production
+    credentials: true
+}));
+app.use(cookieParser());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static('.'));
 
@@ -16,6 +29,43 @@ const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
 const DATABASE_URL = process.env.DATABASE_URL;
 const DEFAULT_ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD || 'hradmin@2025';
 const SENDGRID_FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL || 'mail@quantzinnovations.com';
+
+// JWT Configuration
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
+const JWT_EXPIRATION = '30m'; // 30 minutes
+
+// Generate new JWT secret on first run if not in env
+if (!process.env.JWT_SECRET) {
+    console.warn('⚠️  WARNING: No JWT_SECRET found in environment variables.');
+    console.warn('⚠️  Using auto-generated secret. Add this to your .env file:');
+    console.warn(`⚠️  JWT_SECRET=${JWT_SECRET}`);
+}
+
+// CSRF Protection Configuration
+const CSRF_SECRET = process.env.CSRF_SECRET || crypto.randomBytes(32).toString('hex');
+
+if (!process.env.CSRF_SECRET) {
+    console.warn('⚠️  WARNING: No CSRF_SECRET found in environment variables.');
+    console.warn('⚠️  Using auto-generated secret. Add this to your .env file:');
+    console.warn(`⚠️  CSRF_SECRET=${CSRF_SECRET}`);
+}
+
+const {
+    generateCsrfToken,
+    doubleCsrfProtection
+} = doubleCsrf({
+    getSecret: () => CSRF_SECRET,
+    getSessionIdentifier: (req) => req.session?.id || '',  // Session identifier for CSRF
+    cookieName: '__Host-psifi.x-csrf-token',
+    cookieOptions: {
+        sameSite: 'strict',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true
+    },
+    size: 64,
+    ignoredMethods: ['GET', 'HEAD', 'OPTIONS']
+});
 
 // Initialize OpenRouter client
 const openai = new OpenAI({
@@ -41,6 +91,53 @@ async function getDbClient() {
     await client.connect();
     return client;
 }
+
+// JWT Helper Functions
+function generateToken(user) {
+    return jwt.sign(
+        {
+            userId: user.id,
+            username: user.username,
+            isAdmin: user.is_admin
+        },
+        JWT_SECRET,
+        { expiresIn: JWT_EXPIRATION }
+    );
+}
+
+// Authentication Middleware - Verify JWT token
+function authenticate(req, res, next) {
+    const token = req.cookies.jwt;
+
+    if (!token) {
+        return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        req.user = decoded;
+        next();
+    } catch (err) {
+        return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+}
+
+// Authorization Middleware - Verify admin role
+function requireAdmin(req, res, next) {
+    if (!req.user || !req.user.isAdmin) {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+    next();
+}
+
+// Rate limiter for login endpoint
+const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // 5 attempts per window
+    message: 'Too many login attempts, please try again after 15 minutes',
+    standardHeaders: true,
+    legacyHeaders: false,
+});
 
 async function initializeDatabase() {
     const client = await getDbClient();
@@ -89,8 +186,8 @@ async function initializeDatabase() {
     }
 }
 
-// User Authentication
-app.post('/api/login', async (req, res) => {
+// User Authentication with JWT
+app.post('/api/login', loginLimiter, async (req, res) => {
     try {
         const { username, password } = req.body;
 
@@ -100,21 +197,34 @@ app.post('/api/login', async (req, res) => {
 
         const client = await getDbClient();
         try {
+            // Always perform bcrypt comparison even for non-existent users (timing attack prevention)
+            const dummyHash = '$2b$10$dummyhashfornonexistentusersXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
+
             const result = await client.query('SELECT * FROM users WHERE username = $1', [username]);
 
-            if (result.rows.length === 0) {
-                return res.status(401).json({ error: 'Invalid credentials' });
-            }
-
             const user = result.rows[0];
-            const isValidPassword = await bcrypt.compare(password, user.password_hash);
+            const hashToCompare = user ? user.password_hash : dummyHash;
 
-            if (!isValidPassword) {
+            // Always takes same time to prevent timing attacks
+            const isValidPassword = await bcrypt.compare(password, hashToCompare);
+
+            if (!user || !isValidPassword) {
                 return res.status(401).json({ error: 'Invalid credentials' });
             }
 
             // Update last login
             await client.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+
+            // Generate JWT token
+            const token = generateToken(user);
+
+            // Set HTTP-only cookie with JWT
+            res.cookie('jwt', token, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+                sameSite: 'strict',
+                maxAge: 30 * 60 * 1000 // 30 minutes
+            });
 
             res.json({
                 success: true,
@@ -133,15 +243,21 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// Get all users (admin only)
-app.get('/api/users', async (req, res) => {
+// CSRF token endpoint - Returns token for frontend to use
+app.get('/api/csrf-token', (req, res) => {
+    const csrfToken = generateCsrfToken(req, res);
+    res.json({ csrfToken });
+});
+
+// Logout endpoint
+app.post('/api/logout', doubleCsrfProtection, (req, res) => {
+    res.clearCookie('jwt');
+    res.json({ success: true, message: 'Logged out successfully' });
+});
+
+// Get all users (admin only) - NOW WITH PROPER AUTH
+app.get('/api/users', authenticate, requireAdmin, async (req, res) => {
     try {
-        const { adminUsername } = req.query;
-
-        if (adminUsername !== 'hradmin') {
-            return res.status(403).json({ error: 'Admin access required' });
-        }
-
         const client = await getDbClient();
         try {
             const result = await client.query(
@@ -158,14 +274,10 @@ app.get('/api/users', async (req, res) => {
     }
 });
 
-// Create new user (admin only)
-app.post('/api/users', async (req, res) => {
+// Create new user (admin only) - NOW WITH PROPER AUTH + CSRF
+app.post('/api/users', doubleCsrfProtection, authenticate, requireAdmin, async (req, res) => {
     try {
-        const { username, password, adminUsername } = req.body;
-
-        if (adminUsername !== 'hradmin') {
-            return res.status(403).json({ error: 'Admin access required' });
-        }
+        const { username, password } = req.body;
 
         if (!username || !password) {
             return res.status(400).json({ error: 'Username and password are required' });
@@ -174,8 +286,8 @@ app.post('/api/users', async (req, res) => {
         // Password complexity validation
         const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
         if (!passwordRegex.test(password)) {
-            return res.status(400).json({ 
-                error: 'Password must be at least 8 characters long and contain uppercase, lowercase, number, and special character' 
+            return res.status(400).json({
+                error: 'Password must be at least 8 characters long and contain uppercase, lowercase, number, and special character'
             });
         }
 
@@ -196,7 +308,7 @@ app.post('/api/users', async (req, res) => {
             const hashedPassword = await bcrypt.hash(password, 10);
             const result = await client.query(
                 'INSERT INTO users (username, password_hash, is_admin, created_by) VALUES ($1, $2, $3, $4) RETURNING id, username, created_at',
-                [username, hashedPassword, false, adminUsername]
+                [username, hashedPassword, false, req.user.username]
             );
 
             res.json({ success: true, user: result.rows[0] });
@@ -209,28 +321,30 @@ app.post('/api/users', async (req, res) => {
     }
 });
 
-// Update user password (admin only)
-app.put('/api/users/:id/password', async (req, res) => {
+// Update user password (admin only) - NOW WITH PROPER AUTH + CSRF
+app.put('/api/users/:id/password', doubleCsrfProtection, authenticate, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
-        const { newPassword, adminUsername } = req.body;
+        const { newPassword } = req.body;
 
-        if (adminUsername !== 'hradmin') {
-            return res.status(403).json({ error: 'Admin access required' });
+        // Validate user ID
+        const userId = parseInt(id);
+        if (isNaN(userId) || userId < 1) {
+            return res.status(400).json({ error: 'Invalid user ID' });
         }
 
         // Password complexity validation
         const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
         if (!passwordRegex.test(newPassword)) {
-            return res.status(400).json({ 
-                error: 'Password must be at least 8 characters long and contain uppercase, lowercase, number, and special character' 
+            return res.status(400).json({
+                error: 'Password must be at least 8 characters long and contain uppercase, lowercase, number, and special character'
             });
         }
 
         const client = await getDbClient();
         try {
             const hashedPassword = await bcrypt.hash(newPassword, 10);
-            await client.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hashedPassword, id]);
+            await client.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hashedPassword, userId]);
             res.json({ success: true });
         } finally {
             await client.end();
@@ -241,25 +355,26 @@ app.put('/api/users/:id/password', async (req, res) => {
     }
 });
 
-// Delete user (admin only)
-app.delete('/api/users/:id', async (req, res) => {
+// Delete user (admin only) - NOW WITH PROPER AUTH + CSRF
+app.delete('/api/users/:id', doubleCsrfProtection, authenticate, requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
-        const { adminUsername } = req.body;
 
-        if (adminUsername !== 'hradmin') {
-            return res.status(403).json({ error: 'Admin access required' });
+        // Validate user ID
+        const userId = parseInt(id);
+        if (isNaN(userId) || userId < 1) {
+            return res.status(400).json({ error: 'Invalid user ID' });
         }
 
         const client = await getDbClient();
         try {
             // Don't allow deleting admin user
-            const user = await client.query('SELECT * FROM users WHERE id = $1', [id]);
+            const user = await client.query('SELECT * FROM users WHERE id = $1', [userId]);
             if (user.rows.length > 0 && user.rows[0].is_admin) {
                 return res.status(400).json({ error: 'Cannot delete admin user' });
             }
 
-            await client.query('DELETE FROM users WHERE id = $1', [id]);
+            await client.query('DELETE FROM users WHERE id = $1', [userId]);
             res.json({ success: true });
         } finally {
             await client.end();

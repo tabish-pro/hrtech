@@ -15,6 +15,9 @@ services:
       SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
       SENDGRID_FROM_EMAIL: ${SENDGRID_FROM_EMAIL:-mail@quantzinnovations.com}
       DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-hradmin@2025}
+      # Security secrets
+      JWT_SECRET: ${JWT_SECRET}
+      CSRF_SECRET: ${CSRF_SECRET}
       # DATABASE_URL connects to the 'db' service defined below
       DATABASE_URL: "postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-resume_analyzer_db}?sslmode=disable"
       NODE_ENV: ${NODE_ENV:-production}

@@ -69,40 +69,61 @@
         </div>
 
         <script>
+            // Store CSRF token in memory (not localStorage/sessionStorage for security)
+            let csrfToken = null;
+
+            // Fetch CSRF token on page load
+            async function fetchCsrfToken() {
+                try {
+                    const response = await fetch('/api/csrf-token', {
+                        credentials: 'include'
+                    });
+                    const data = await response.json();
+                    csrfToken = data.csrfToken;
+                } catch (error) {
+                    console.error('Failed to fetch CSRF token:', error);
+                }
+            }
+
+            // Fetch CSRF token when page loads
+            fetchCsrfToken();
+
             document.getElementById('loginForm').addEventListener('submit', async function(e) {
                 e.preventDefault();
-                
+
                 const username = document.getElementById('username').value;
                 const password = document.getElementById('password').value;
                 const errorMessage = document.getElementById('errorMessage');
                 const submitBtn = this.querySelector('button[type="submit"]');
-                
+
                 // Show loading state
                 const originalText = submitBtn.innerHTML;
                 submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Signing In...';
                 submitBtn.disabled = true;
-                
+
                 // Hide any previous error
                 errorMessage.style.display = 'none';
-                
+
                 try {
                     const response = await fetch('/api/login', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
                         },
+                        credentials: 'include', // Important: send/receive cookies
                         body: JSON.stringify({ username, password })
                     });
-                    
+
                     const result = await response.json();
-                    
+
                     if (response.ok && result.success) {
-                        // Set session data
+                        // JWT token is now in HTTP-only cookie (secure)
+                        // Store only non-sensitive user info in sessionStorage for UI purposes
                         sessionStorage.setItem('isLoggedIn', 'true');
                         sessionStorage.setItem('username', result.user.username);
                         sessionStorage.setItem('isAdmin', result.user.isAdmin);
                         sessionStorage.setItem('userId', result.user.id);
-                        
+
                         // Redirect to main page
                         window.location.href = 'index.html';
                     } else {
@@ -110,18 +131,25 @@
                     }
                 } catch (error) {
                     console.error('Login error:', error);
-                    
-                    // Show error
-                    errorMessage.textContent = error.message || 'Invalid username or password. Please try again.';
+
+                    // Show error with better messaging
+                    let errorText = error.message || 'Invalid username or password. Please try again.';
+
+                    // Handle rate limiting
+                    if (error.message && error.message.includes('Too many')) {
+                        errorText = 'Too many login attempts. Please try again in 15 minutes.';
+                    }
+
+                    errorMessage.textContent = errorText;
                     errorMessage.style.display = 'block';
-                    
+
                     // Restore button
                     submitBtn.innerHTML = originalText;
                     submitBtn.disabled = false;
-                    
+
                     // Clear password field
                     document.getElementById('password').value = '';
-                    
+
                     // Shake animation
                     errorMessage.style.animation = 'shake 0.5s ease-in-out';
                     setTimeout(() => {
@@ -129,8 +157,8 @@
                     }, 500);
                 }
             });
-            
-            // Check if already logged in
+
+            // Check if already logged in (basic UI check - real auth is in cookie)
             if (sessionStorage.getItem('isLoggedIn') === 'true') {
                 window.location.href = 'index.html';
             }

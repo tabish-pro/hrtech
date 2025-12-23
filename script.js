@@ -1,5 +1,8 @@
 class ResumeMatcherApp {
     constructor() {
+        // Store CSRF token in memory
+        this.csrfToken = null;
+
         // Check authentication first
         this.checkAuthentication();
 
@@ -7,8 +10,25 @@ class ResumeMatcherApp {
         this.resumeFiles = [];
         this.analysisResults = null;
         this.additionalCriteria = this.loadCriteria();
-        this.initializeEventListeners();
-        this.initializeLogout();
+
+        // Fetch CSRF token before initializing
+        this.fetchCsrfToken().then(() => {
+            this.initializeEventListeners();
+            this.initializeLogout();
+        });
+    }
+
+    async fetchCsrfToken() {
+        try {
+            const response = await fetch('/api/csrf-token', {
+                credentials: 'include'
+            });
+            const data = await response.json();
+            this.csrfToken = data.csrfToken;
+            console.log('CSRF token fetched successfully');
+        } catch (error) {
+            console.error('Failed to fetch CSRF token:', error);
+        }
     }
 
     checkAuthentication() {
@@ -90,7 +110,9 @@ class ResumeMatcherApp {
 
         try {
             console.log('Fetching users for admin:', username);
-            const response = await fetch(`/api/users?adminUsername=${encodeURIComponent(username)}`);
+            const response = await fetch('/api/users', {
+                credentials: 'include' // Send JWT cookie with request
+            });
 
             if (!response.ok) {
                 const errorText = await response.text();
@@ -369,12 +391,13 @@ class ResumeMatcherApp {
             const response = await fetch('/api/users', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'x-csrf-token': this.csrfToken // Add CSRF token
                 },
+                credentials: 'include', // Send JWT cookie
                 body: JSON.stringify({
                     username,
-                    password,
-                    adminUsername: sessionStorage.getItem('username')
+                    password
                 })
             });
 
@@ -416,11 +439,12 @@ class ResumeMatcherApp {
             const response = await fetch(`/api/users/${userId}/password`, {
                 method: 'PUT',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'x-csrf-token': this.csrfToken // Add CSRF token
                 },
+                credentials: 'include', // Send JWT cookie
                 body: JSON.stringify({
-                    newPassword,
-                    adminUsername: sessionStorage.getItem('username')
+                    newPassword
                 })
             });
 
@@ -447,11 +471,10 @@ class ResumeMatcherApp {
             const response = await fetch(`/api/users/${userId}`, {
                 method: 'DELETE',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'x-csrf-token': this.csrfToken // Add CSRF token
                 },
-                body: JSON.stringify({
-                    adminUsername: sessionStorage.getItem('username')
-                })
+                credentials: 'include' // Send JWT cookie
             });
 
             const result = await response.json();
