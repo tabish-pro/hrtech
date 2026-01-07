@@ -3,8 +3,8 @@ class ResumeMatcherApp {
         // Store CSRF token in memory
         this.csrfToken = null;
 
-        // Check authentication first
-        this.checkAuthentication();
+        // Check license first, then authentication
+        this.checkLicenseBeforeAuth();
 
         this.jobFile = null;
         this.resumeFiles = [];
@@ -28,6 +28,26 @@ class ResumeMatcherApp {
             console.log('CSRF token fetched successfully');
         } catch (error) {
             console.error('Failed to fetch CSRF token:', error);
+        }
+    }
+
+    async checkLicenseBeforeAuth() {
+        try {
+            const response = await fetch('/api/license/status');
+            const data = await response.json();
+
+            if (data.requiresLicense) {
+                // License expired - redirect to login page (which will show license modal)
+                window.location.href = 'login.html';
+                return;
+            }
+
+            // License is valid or not required yet - proceed with auth check
+            this.checkAuthentication();
+        } catch (error) {
+            console.error('Failed to check license:', error);
+            // Allow app to continue on error
+            this.checkAuthentication();
         }
     }
 
@@ -153,7 +173,7 @@ class ResumeMatcherApp {
                                     <h4>Create New User</h4>
                                 </div>
                                 <div class="section-meta">
-                                    <small class="section-subtitle">Maximum 5 users allowed</small>
+                                    <small class="section-subtitle">Maximum 20 users allowed</small>
                                     <i class="fas fa-chevron-down toggle-icon"></i>
                                 </div>
                             </div>

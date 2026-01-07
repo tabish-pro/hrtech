@@ -12,6 +12,58 @@
         />
     </head>
     <body>
+        <!-- License Validation Modal -->
+        <div id="licenseModal" class="license-modal" style="display: none;">
+            <div class="license-modal-content">
+                <div class="license-header">
+                    <i class="fas fa-key"></i>
+                    <h2>License Required</h2>
+                </div>
+
+                <div id="licenseWarning" class="license-warning" style="display: none;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Your license will expire in <span id="daysRemaining"></span> days.</p>
+                    <p>Please enter your license key to continue using the application.</p>
+                </div>
+
+                <div id="licenseExpired" class="license-expired" style="display: none;">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <p>Your license has expired. Please enter a valid license key to continue.</p>
+                </div>
+
+                <form id="licenseForm">
+                    <div class="input-group">
+                        <label for="licenseKey">
+                            <i class="fas fa-key"></i>
+                            License Key
+                        </label>
+                        <input
+                            type="text"
+                            id="licenseKey"
+                            name="licenseKey"
+                            placeholder="Enter your license key"
+                            required
+                        />
+                    </div>
+
+                    <button type="submit" class="license-btn">
+                        <i class="fas fa-check"></i>
+                        Activate License
+                    </button>
+
+                    <div id="licenseError" class="error-message" style="display: none;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        Invalid license key. Please try again.
+                    </div>
+                </form>
+
+                <button id="skipLicenseBtn" class="skip-license-btn" style="display: none;">
+                    <i class="fas fa-arrow-right"></i>
+                    Continue Anyway
+                </button>
+            </div>
+        </div>
+
         <div class="login-container">
             <div class="login-card">
                 <div class="login-header">
@@ -87,6 +139,89 @@
 
             // Fetch CSRF token when page loads
             fetchCsrfToken();
+
+            // Check license status on page load
+            async function checkLicenseStatus() {
+                try {
+                    const response = await fetch('/api/license/status');
+                    const data = await response.json();
+
+                    if (data.requiresLicense) {
+                        // License expired - show modal, hide login
+                        document.getElementById('licenseModal').style.display = 'flex';
+                        document.querySelector('.login-container').style.display = 'none';
+                        document.getElementById('licenseExpired').style.display = 'block';
+                        return false;
+                    } else if (data.showWarning) {
+                        // Show warning but allow login
+                        document.getElementById('licenseModal').style.display = 'flex';
+                        document.querySelector('.login-container').style.display = 'none';
+                        document.getElementById('licenseWarning').style.display = 'block';
+                        document.getElementById('daysRemaining').textContent = data.daysUntilExpiry;
+                        document.getElementById('skipLicenseBtn').style.display = 'block';
+                        return false;
+                    }
+
+                    return true; // License is valid or not yet required
+                } catch (error) {
+                    console.error('Failed to check license:', error);
+                    return true; // Allow login on error
+                }
+            }
+
+            // Handle license form submission
+            document.getElementById('licenseForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+
+                const licenseKey = document.getElementById('licenseKey').value;
+                const errorMessage = document.getElementById('licenseError');
+                const submitBtn = this.querySelector('button[type="submit"]');
+
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Validating...';
+                submitBtn.disabled = true;
+                errorMessage.style.display = 'none';
+
+                try {
+                    const response = await fetch('/api/license/validate', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-Token': csrfToken
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify({ licenseKey })
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok && result.success) {
+                        // License activated - hide modal, show login
+                        document.getElementById('licenseModal').style.display = 'none';
+                        document.querySelector('.login-container').style.display = 'flex';
+
+                        // Show success message
+                        alert('License activated successfully!');
+                    } else {
+                        throw new Error(result.error || 'Invalid license key');
+                    }
+                } catch (error) {
+                    console.error('License validation error:', error);
+                    errorMessage.textContent = error.message;
+                    errorMessage.style.display = 'block';
+
+                    submitBtn.innerHTML = '<i class="fas fa-check"></i> Activate License';
+                    submitBtn.disabled = false;
+                }
+            });
+
+            // Handle skip button (only shown during warning period)
+            document.getElementById('skipLicenseBtn').addEventListener('click', function() {
+                document.getElementById('licenseModal').style.display = 'none';
+                document.querySelector('.login-container').style.display = 'flex';
+            });
+
+            // Check license when page loads
+            checkLicenseStatus();
 
             document.getElementById('loginForm').addEventListener('submit', async function(e) {
                 e.preventDefault();

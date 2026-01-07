@@ -157,6 +157,34 @@ async function initializeDatabase() {
         `);
         console.log('✅ Users table ready');
 
+        // Create license_settings table if it doesn't exist
+        console.log('🔄 Creating license_settings table if not exists...');
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS license_settings (
+                id SERIAL PRIMARY KEY,
+                license_key VARCHAR(255),
+                is_licensed BOOLEAN DEFAULT FALSE,
+                licensed_at TIMESTAMP,
+                expiry_date TIMESTAMP DEFAULT '2026-06-01 00:00:00',
+                last_checked TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        console.log('✅ License settings table ready');
+
+        // Initialize default license record if none exists
+        const licenseCheck = await client.query('SELECT * FROM license_settings LIMIT 1');
+        if (licenseCheck.rows.length === 0) {
+            console.log('🔄 Initializing license settings...');
+            await client.query(
+                'INSERT INTO license_settings (expiry_date, is_licensed) VALUES ($1, $2)',
+                ['2026-06-01 00:00:00', false]
+            );
+            console.log('✅ License settings initialized (expires: June 1, 2026)');
+        } else {
+            console.log('✅ License settings already configured');
+        }
+
         // Check if default admin exists
         console.log('🔍 Checking for default admin user...');
         const adminCheck = await client.query('SELECT * FROM users WHERE username = $1', ['hradmin']);
@@ -249,6 +277,93 @@ app.get('/api/csrf-token', (req, res) => {
     res.json({ csrfToken });
 });
 
+// License status endpoint - Public endpoint (no auth required, needed before login)
+app.get('/api/license/status', async (req, res) => {
+    try {
+        const client = await getDbClient();
+        try {
+            const result = await client.query(
+                'SELECT is_licensed, expiry_date FROM license_settings ORDER BY id DESC LIMIT 1'
+            );
+
+            if (result.rows.length === 0) {
+                return res.json({
+                    status: 'unlicensed',
+                    expiryDate: '2026-06-01T00:00:00Z',
+                    daysUntilExpiry: null,
+                    requiresLicense: false,
+                    showWarning: false
+                });
+            }
+
+            const { is_licensed, expiry_date } = result.rows[0];
+            const now = new Date();
+            const expiry = new Date(expiry_date);
+            const daysUntilExpiry = Math.ceil((expiry - now) / (1000 * 60 * 60 * 24));
+
+            const requiresLicense = now > expiry && !is_licensed;
+            const showWarning = daysUntilExpiry <= 30 && daysUntilExpiry > 0 && !is_licensed;
+
+            res.json({
+                status: is_licensed ? 'licensed' : (requiresLicense ? 'expired' : (showWarning ? 'warning' : 'active')),
+                expiryDate: expiry_date,
+                daysUntilExpiry,
+                requiresLicense,
+                showWarning
+            });
+        } finally {
+            await client.end();
+        }
+    } catch (error) {
+        console.error('License status error:', error);
+        res.status(500).json({ error: 'Failed to check license status' });
+    }
+});
+
+// License validation endpoint - Validates and activates license key
+app.post('/api/license/validate', doubleCsrfProtection, async (req, res) => {
+    try {
+        const { licenseKey } = req.body;
+
+        if (!licenseKey) {
+            return res.status(400).json({
+                success: false,
+                error: 'License key is required'
+            });
+        }
+
+        // Hardcoded license key validation
+        const VALID_LICENSE_KEY = '324sffrh323sdf3r343';
+
+        if (licenseKey !== VALID_LICENSE_KEY) {
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid license key'
+            });
+        }
+
+        const client = await getDbClient();
+        try {
+            await client.query(
+                'UPDATE license_settings SET is_licensed = TRUE, license_key = $1, licensed_at = NOW(), last_checked = NOW() WHERE id = (SELECT id FROM license_settings ORDER BY id DESC LIMIT 1)',
+                [licenseKey]
+            );
+
+            console.log('✅ License activated successfully');
+
+            res.json({
+                success: true,
+                message: 'License activated successfully'
+            });
+        } finally {
+            await client.end();
+        }
+    } catch (error) {
+        console.error('License validation error:', error);
+        res.status(500).json({ error: 'Failed to validate license' });
+    }
+});
+
 // Logout endpoint
 app.post('/api/logout', doubleCsrfProtection, (req, res) => {
     res.clearCookie('jwt');
@@ -293,10 +408,10 @@ app.post('/api/users', doubleCsrfProtection, authenticate, requireAdmin, async (
 
         const client = await getDbClient();
         try {
-            // Check if user limit reached (max 5 non-admin users)
+            // Check if user limit reached (max 20 non-admin users)
             const userCount = await client.query('SELECT COUNT(*) FROM users WHERE is_admin = FALSE');
-            if (parseInt(userCount.rows[0].count) >= 5) {
-                return res.status(400).json({ error: 'Maximum 5 users allowed' });
+            if (parseInt(userCount.rows[0].count) >= 20) {
+                return res.status(400).json({ error: 'Maximum 20 users allowed' });
             }
 
             // Check if username already exists
