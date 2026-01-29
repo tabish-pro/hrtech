@@ -15,6 +15,9 @@ const crypto = require('crypto');
 const { doubleCsrf } = require('csrf-csrf');
 const app = express();
 
+// Trust proxy - needed when behind nginx reverse proxy
+app.set('trust proxy', 1);
+
 // CORS configuration - allow credentials for cookie-based auth
 app.use(cors({
     origin: true, // Will be restricted in production
